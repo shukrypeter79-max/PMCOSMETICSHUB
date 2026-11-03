@@ -15,7 +15,7 @@ This command-line prototype uses one SAM 3.1 concept prompt to segment matching 
 From the repository root, install the small optional dependency:
 
 ```sh
-python -m pip install 'openai>=1.68.0'
+python -m pip install -r requirements-sam.txt
 export MODEL_API_KEY='your-secret-from-the-provider'
 python tools/sam_segment.py --prompt 'cosmetic bottle' --image-url 'https://example.com/authorized-image.jpg'
 ```

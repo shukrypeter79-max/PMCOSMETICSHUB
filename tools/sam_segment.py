@@ -24,7 +24,7 @@ def validate_prompt(prompt: str) -> str:
         raise ValueError("Prompt cannot be empty.")
     if len(value) > 120:
         raise ValueError("Use a concise noun phrase (at most 120 characters).")
-    if any(separator in value for separator in (",", ";", "+", "\n")):
+    if any(separator in value for separator in (",", ";", "+")):
         raise ValueError("Send one concept per request; do not list concepts.")
     lowered = value.lower()
     if " and " in lowered or " or " in lowered:
@@ -64,18 +64,14 @@ def main() -> int:
                     {"type": "input_image", "image_url": image_url},
                 ],
             }],
-            stream=True,
             metadata={"mask_encoding": "one_bit", "include_confidence": "true"},
         ) as stream:
             for event in stream:
                 if event.type == "response.output_text.delta":
                     print(event.delta, end="", flush=True)
-                elif event.type == "response.failed":
-                    print("\nSAM request failed.", file=sys.stderr)
-                    return 1
         print()
         return 0
-    except (ValueError, Exception) as exc:
+    except Exception as exc:
         # Avoid logging request headers or credentials. Provider errors can contain details;
         # print only the exception class to keep accidental sensitive data out of logs.
         print(f"SAM request error: {type(exc).__name__}", file=sys.stderr)
