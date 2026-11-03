@@ -1,0 +1,2 @@
+# Optional SAM 3.1 CLI dependencies
+openai>=1.68.0
