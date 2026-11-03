@@ -5,17 +5,18 @@ services:
     image: postgres:15-alpine
     container_name: pmcosmetics-db
     environment:
-      POSTGRES_USER: pmcosmetics
-      POSTGRES_PASSWORD: pmcosmetics123
-      POSTGRES_DB: pmcosmetics
+      POSTGRES_USER: ${POSTGRES_USER:-pmcosmetics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env file}
+      POSTGRES_DB: ${POSTGRES_DB:-pmcosmetics}
+    # Keep local development ports off public network interfaces.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - pmcosmetics-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pmcosmetics"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: pmcosmetics-cache
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
