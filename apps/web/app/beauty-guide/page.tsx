@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type Goal = 'hydration' | 'calm' | 'glow';
 type DemoProduct = {
@@ -25,6 +25,9 @@ const DEMO_PRODUCTS: DemoProduct[] = [
   { id: 'demo-06', name: 'Quiet Garden Face Oil', type: 'Face oil', price: 20, currency: 'USD', ingredients: ['squalane', 'fragrance-free'], goals: ['hydration', 'calm'], note: 'A sample oil listing. Patch test new products and review full labels.', color: '#e8e7d8' },
 ];
 
+const SAVED_STORAGE_KEY = 'pm-beauty-guide:saved:v1';
+const VALID_PRODUCT_IDS = new Set(DEMO_PRODUCTS.map((product) => product.id));
+
 const GOALS: { id: Goal; label: string; emoji: string }[] = [
   { id: 'hydration', label: 'More hydration', emoji: '💧' },
   { id: 'calm', label: 'A gentler-feeling routine', emoji: '🌿' },
@@ -36,8 +39,32 @@ export default function BeautyGuidePage() {
   const [budget, setBudget] = useState(25);
   const [avoidFragrance, setAvoidFragrance] = useState(true);
   const [saved, setSaved] = useState<string[]>([]);
+  const [savedLoaded, setSavedLoaded] = useState(false);
   const [compared, setCompared] = useState<string[]>([]);
   const [showAll, setShowAll] = useState(false);
+
+  // Keep the small demo wishlist in this browser only. Invalid/stale IDs are discarded.
+  useEffect(() => {
+    try {
+      const stored: unknown = JSON.parse(window.localStorage.getItem(SAVED_STORAGE_KEY) ?? '[]');
+      if (Array.isArray(stored)) {
+        setSaved([...new Set(stored.filter((id): id is string => typeof id === 'string' && VALID_PRODUCT_IDS.has(id)))]);
+      }
+    } catch {
+      // Ignore unavailable storage or malformed old data; the guide remains usable.
+    } finally {
+      setSavedLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!savedLoaded) return;
+    try {
+      window.localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(saved));
+    } catch {
+      // Private browsing or a full storage quota should not break recommendations.
+    }
+  }, [saved, savedLoaded]);
 
   const ranked = useMemo(() => DEMO_PRODUCTS
     .filter((product) => product.price <= budget)
@@ -118,7 +145,7 @@ export default function BeautyGuidePage() {
             </div>}
 
             {comparedProducts.length > 0 && <section aria-live="polite" className="mt-6 rounded-2xl border border-[#dce4d9] bg-[#f0f4ee] p-5"><div className="flex items-center justify-between"><h3 className="font-semibold text-[#354439]">Your comparison <span className="text-xs font-normal">({comparedProducts.length}/3)</span></h3><button type="button" onClick={() => setCompared([])} className="text-xs text-[#657166] underline underline-offset-2">Clear</button></div><div className="mt-3 divide-y divide-[#dce4d9]">{comparedProducts.map((product) => <div key={product.id} className="flex flex-wrap justify-between gap-2 py-2 text-sm"><span>{product.name}</span><span className="text-[#667467]">${product.price} · {product.ingredients.join(', ')}</span></div>)}</div></section>}
-            {saved.length > 0 && <p className="mt-4 text-sm text-[#657166]" aria-live="polite">♥ {saved.length} {saved.length === 1 ? 'sample item' : 'sample items'} saved for this session.</p>}
+            {saved.length > 0 && <p className="mt-4 text-sm text-[#657166]" aria-live="polite">♥ {saved.length} {saved.length === 1 ? 'sample item' : 'sample items'} saved in this browser.</p>}
           </div>
         </section>
 
