@@ -1,135 +1,135 @@
 import json
-from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from workers import WorkerEntrypoint, Request, Response
 
-COUNTRIES = [
-    "United States", "United Kingdom", "Canada", "Australia", "Germany", "France",
-    "Spain", "Italy", "Netherlands", "Sweden", "Norway", "Finland", "Poland",
-    "United Arab Emirates", "Saudi Arabia", "Egypt", "South Africa", "Kenya",
-    "India", "Japan", "Singapore", "Brazil", "Mexico"
-]
+from catalog_data import CATALOG, COUNTRIES, filter_catalog
 
-LEGACY_APP_NAMES = [
-    "Glow Boost Serum", "Luna Lotion", "Rose Dew Cleanser", "Velvet Mask", "Silk Mist",
-    "Nova Repair Cream", "Amber Glow Essence", "Pure Pore Tonic", "Sunveil SPF", "Bloom Ritual Oil",
-    "Hydra Calm Gel", "Petal Peel", "Cobalt Cleanser", "Pearl Barrier Cream", "Satin Reset Serum",
-    "Mosaic Mist", "Moon Silk Toner", "Velour Repair Mask", "Crystal Dew Essence", "Forest Renew Soap",
-    "Dawn Vitamin Serum", "Radiant Lift Cream", "Golden Glow Balm", "Airy Mist", "Prism Cleanse",
-    "Refine Night Oil", "Crescent Peel", "Soft Reset Lotion", "Glowstone Mist", "Vitamin Bloom",
-    "Boundless Buffer", "Cielo Wash", "Opal Essence", "Horizon Cleanser", "Night Bloom Cream",
-    "Velvet Veil", "Regent Repair", "Sunlit Serum", "Lunar Formula", "Frosthydrate", "Petal Nectar",
-    "Mira Mist", "Noir Cleanse", "Prisma Serum", "Skyline Toner", "Berry Cloud Cream", "Sculpt Lift",
-    "Pure Lab Essence", "Solstice Peel", "Everlight Foam", "Luxe Balance Serum", "Aster Mist",
-    "Aurum Repair Oil", "Aqua Bloom Cleanser", "Lean Veil", "Mellow Dew", "Moonbeam Serum",
-    "Rescue Balance", "Moisture Veil", "Canvas Lather", "Pristine Foam", "Quiet Dew", "Organic Bloom",
-    "Supreme Hydration", "Satin Renewal", "Hydro Lift", "Urban Glow", "Golden Mist", "Citrine Care",
-    "Soft Depth Serum", "Bloom Restorer", "Violet Calm", "Aqua Silk", "Frosted Nectar", "Moss Dew"
-]
+MAX_LIMIT = 100
+SORT_FIELDS = {"id", "name", "price", "rating"}
+CORS_HEADERS = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, HEAD, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "access-control-max-age": "86400",
+}
 
 
-def _country_for_index(index: int) -> str:
-    return COUNTRIES[index % len(COUNTRIES)]
+def _json_response(data, status=200, extra_headers=None):
+    headers = {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, max-age=60, stale-while-revalidate=300",
+        **CORS_HEADERS,
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    return Response(json.dumps(data), status=status, headers=headers)
 
 
-def _build_catalog() -> list[dict[str, Any]]:
-    apps: list[dict[str, Any]] = []
-    for i in range(1, 601):
-        app_name = LEGACY_APP_NAMES[(i - 1) % len(LEGACY_APP_NAMES)]
-        category = ["Beauty", "Skincare", "Wellness", "Care", "Lifestyle", "Essentials"][i % 6]
-        region = _country_for_index(i)
-        apps.append({
-            "id": i,
-            "name": f"{app_name} {i}",
-            "category": category,
-            "country": region,
-            "price": round(5.99 + (i % 17) * 2.35, 2),
-            "rating": round(3.8 + (i % 15) * 0.1, 1),
-            "status": "active" if i % 3 else "beta",
-            "currency": "USD",
-            "featured": i % 5 == 0,
-            "tags": [category.lower(), region.lower().replace(" ", "-")],
-            "description": f"{app_name} for {region} market. Helps users discover premium beauty and wellness routines.",
-        })
-    return apps
-
-CATALOG = _build_catalog()
+def _error(message, status=400):
+    return _json_response({"error": message, "is_demo": True}, status)
 
 
-def _json_response(data: Any, status: int = 200) -> Response:
-    return Response(
-        json.dumps(data),
-        status=status,
-        headers={"content-type": "application/json; charset=utf-8"},
-    )
+def _single_query(params, name, default=None):
+    values = params.get(name, [])
+    if len(values) > 1:
+        raise ValueError(f"Parameter '{name}' must appear only once")
+    return values[0] if values else default
+
+
+def _number_param(params, name):
+    raw = _single_query(params, name)
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"Parameter '{name}' must be a number") from None
+    if value < 0 or value != value or value == float("inf"):
+        raise ValueError(f"Parameter '{name}' must be a finite non-negative number")
+    return value
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request: Request):
-        url = request.url
-        path = url.split("?", 1)[0].rstrip("/")
+        method = request.method.upper()
+        if method == "OPTIONS":
+            return Response("", status=204, headers=CORS_HEADERS)
+        if method not in ("GET", "HEAD"):
+            return _json_response({"error": "Method not allowed"}, 405, {"allow": "GET, HEAD, OPTIONS"})
 
-        if path == "" or path == "/":
+        parsed_url = urlsplit(request.url)
+        path = parsed_url.path.rstrip("/") or "/"
+        if path == "/":
             return _json_response({
-                "service": "PMCosmeticsHub App Store API",
+                "service": "PMCosmeticsHub synthetic demo catalog API",
                 "status": "online",
+                "is_demo": True,
+                "notice": "All catalog records and prices are fictional fixtures, not real products or inventory.",
                 "countries": len(COUNTRIES),
-                "apps": len(CATALOG),
-                "version": "0.1.0",
-                "endpoints": [
-                    "/health",
-                    "/countries",
-                    "/apps",
-                    "/apps?country=United States",
-                    "/apps?limit=25&page=2",
-                ],
+                "items": len(CATALOG),
+                "endpoints": ["/health", "/countries", "/apps", "/apps/{id}"],
+                "query_parameters": {"country": "exact country name", "q": "search text", "min_price": "number", "max_price": "number", "sort": "id|name|price|rating", "order": "asc|desc", "page": "1-based", "limit": f"1-{MAX_LIMIT}"},
             })
-
         if path == "/health":
-            return _json_response({"status": "ok", "items": len(CATALOG), "countries": len(COUNTRIES)})
-
+            return _json_response({"status": "ok", "is_demo": True, "items": len(CATALOG), "countries": len(COUNTRIES)})
         if path == "/countries":
-            return _json_response({"countries": COUNTRIES})
+            return _json_response({"is_demo": True, "countries": COUNTRIES})
 
         if path == "/apps":
-            params = request.url.split("?", 1)[1] if "?" in request.url else ""
-            query = {}
-            if params:
-                for pair in params.split("&"):
-                    if "=" in pair:
-                        key, value = pair.split("=", 1)
-                        query[key.lower()] = value
-
-            country = query.get("country")
-            if country:
-                country = country.replace("+", " ")
-                filtered = [app for app in CATALOG if app["country"].lower() == country.lower()]
-            else:
-                filtered = list(CATALOG)
-
-            page = int(query.get("page", "1"))
-            limit = int(query.get("limit", "50"))
-            start = (page - 1) * limit
-            end = start + limit
-            page_items = filtered[start:end]
-
-            return _json_response({
-                "page": page,
-                "limit": limit,
-                "total": len(filtered),
-                "countries": len(COUNTRIES),
-                "items": page_items,
-            })
+            try:
+                params = parse_qs(parsed_url.query, keep_blank_values=True, strict_parsing=False)
+                allowed = {"country", "q", "min_price", "max_price", "sort", "order", "page", "limit"}
+                unknown = set(params) - allowed
+                if unknown:
+                    raise ValueError(f"Unknown query parameter: {sorted(unknown)[0]}")
+                country = _single_query(params, "country")
+                if country and country.casefold() not in {item.casefold() for item in COUNTRIES}:
+                    raise ValueError("Unsupported country; use a value from /countries")
+                search = _single_query(params, "q", "")
+                if len(search) > 100:
+                    raise ValueError("Search query is too long (maximum 100 characters)")
+                minimum = _number_param(params, "min_price")
+                maximum = _number_param(params, "max_price")
+                if minimum is not None and maximum is not None and minimum > maximum:
+                    raise ValueError("min_price cannot exceed max_price")
+                sort = _single_query(params, "sort", "id")
+                if sort not in SORT_FIELDS:
+                    raise ValueError("sort must be one of: id, name, price, rating")
+                order = _single_query(params, "order", "asc").lower()
+                if order not in ("asc", "desc"):
+                    raise ValueError("order must be asc or desc")
+                page = int(_single_query(params, "page", "1"))
+                limit = int(_single_query(params, "limit", "50"))
+                if page < 1:
+                    raise ValueError("page must be at least 1")
+                if limit < 1 or limit > MAX_LIMIT:
+                    raise ValueError(f"limit must be between 1 and {MAX_LIMIT}")
+                filtered = filter_catalog(
+                    CATALOG, country=country, search=search, min_price=minimum,
+                    max_price=maximum, sort=sort, descending=order == "desc",
+                )
+                start = (page - 1) * limit
+                return _json_response({
+                    "is_demo": True,
+                    "notice": "Synthetic fixtures only. Do not use as product, pricing, or stock data.",
+                    "page": page,
+                    "limit": limit,
+                    "total": len(filtered),
+                    "countries": len(COUNTRIES),
+                    "items": filtered[start:start + limit],
+                })
+            except (ValueError, OverflowError) as exc:
+                return _error(str(exc))
 
         if path.startswith("/apps/"):
-            try:
-                app_id = int(path.split("/")[-1])
-            except ValueError:
-                return _json_response({"error": "Invalid app id"}, 400)
+            raw_id = path.rsplit("/", 1)[-1]
+            if not raw_id.isdecimal():
+                return _error("Invalid app id", 400)
+            item_id = int(raw_id)
+            item = next((entry for entry in CATALOG if entry["id"] == item_id), None)
+            if item is None:
+                return _error("App not found", 404)
+            return _json_response(item)
 
-            app = next((item for item in CATALOG if item["id"] == app_id), None)
-            if app is None:
-                return _json_response({"error": "App not found"}, 404)
-            return _json_response(app)
-
-        return _json_response({"error": "Not found"}, 404)
+        return _error("Not found", 404)
