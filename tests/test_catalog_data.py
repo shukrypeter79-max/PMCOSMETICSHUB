@@ -1,6 +1,6 @@
 import unittest
 
-from catalog_data import CATALOG, COUNTRIES, filter_catalog
+from catalog_data import CATALOG, CATEGORIES, COUNTRIES, filter_catalog
 
 
 class CatalogDataTests(unittest.TestCase):
@@ -8,12 +8,13 @@ class CatalogDataTests(unittest.TestCase):
         self.assertEqual(len(CATALOG), 600)
         self.assertTrue(all(item["is_demo"] is True for item in CATALOG))
         self.assertEqual(len(COUNTRIES), 23)
+        self.assertEqual(len(CATEGORIES), 6)
         self.assertEqual(len({item["id"] for item in CATALOG}), 600)
 
-    def test_country_filter_is_case_insensitive(self):
-        results = filter_catalog(CATALOG, country="egypt")
+    def test_country_and_category_filter_are_case_insensitive(self):
+        results = filter_catalog(CATALOG, country="egypt", category="skincare")
         self.assertTrue(results)
-        self.assertTrue(all(item["country"] == "Egypt" for item in results))
+        self.assertTrue(all(item["country"] == "Egypt" and item["category"] == "Skincare" for item in results))
 
     def test_search_is_case_insensitive_and_searches_metadata(self):
         results = filter_catalog(CATALOG, search="wellness")

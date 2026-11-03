@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from workers import WorkerEntrypoint, Request, Response
 
-from catalog_data import CATALOG, COUNTRIES, filter_catalog
+from catalog_data import CATALOG, CATEGORIES, COUNTRIES, filter_catalog
 
 MAX_LIMIT = 100
 SORT_FIELDS = {"id", "name", "price", "rating"}
@@ -69,23 +69,28 @@ class Default(WorkerEntrypoint):
                 "countries": len(COUNTRIES),
                 "items": len(CATALOG),
                 "endpoints": ["/health", "/countries", "/apps", "/apps/{id}"],
-                "query_parameters": {"country": "exact country name", "q": "search text", "min_price": "number", "max_price": "number", "sort": "id|name|price|rating", "order": "asc|desc", "page": "1-based", "limit": f"1-{MAX_LIMIT}"},
+                "query_parameters": {"country": "exact country name", "category": "exact category", "q": "search text", "min_price": "number", "max_price": "number", "sort": "id|name|price|rating", "order": "asc|desc", "page": "1-based", "limit": f"1-{MAX_LIMIT}"},
             })
         if path == "/health":
             return _json_response({"status": "ok", "is_demo": True, "items": len(CATALOG), "countries": len(COUNTRIES)})
         if path == "/countries":
             return _json_response({"is_demo": True, "countries": COUNTRIES})
+        if path == "/categories":
+            return _json_response({"is_demo": True, "categories": CATEGORIES})
 
         if path == "/apps":
             try:
                 params = parse_qs(parsed_url.query, keep_blank_values=True, strict_parsing=False)
-                allowed = {"country", "q", "min_price", "max_price", "sort", "order", "page", "limit"}
+                allowed = {"country", "category", "q", "min_price", "max_price", "sort", "order", "page", "limit"}
                 unknown = set(params) - allowed
                 if unknown:
                     raise ValueError(f"Unknown query parameter: {sorted(unknown)[0]}")
                 country = _single_query(params, "country")
                 if country and country.casefold() not in {item.casefold() for item in COUNTRIES}:
                     raise ValueError("Unsupported country; use a value from /countries")
+                category = _single_query(params, "category")
+                if category and category.casefold() not in {item.casefold() for item in CATEGORIES}:
+                    raise ValueError("Unsupported category; use a value from /categories")
                 search = _single_query(params, "q", "")
                 if len(search) > 100:
                     raise ValueError("Search query is too long (maximum 100 characters)")
@@ -106,7 +111,7 @@ class Default(WorkerEntrypoint):
                 if limit < 1 or limit > MAX_LIMIT:
                     raise ValueError(f"limit must be between 1 and {MAX_LIMIT}")
                 filtered = filter_catalog(
-                    CATALOG, country=country, search=search, min_price=minimum,
+                    CATALOG, country=country, category=category, search=search, min_price=minimum,
                     max_price=maximum, sort=sort, descending=order == "desc",
                 )
                 start = (page - 1) * limit

@@ -10,7 +10,7 @@ COUNTRIES = [
     "United Arab Emirates", "Saudi Arabia", "Egypt", "South Africa", "Kenya",
     "India", "Japan", "Singapore", "Brazil", "Mexico",
 ]
-
+CATEGORIES = ["Beauty", "Skincare", "Wellness", "Care", "Lifestyle", "Essentials"]
 LEGACY_APP_NAMES = [
     "Glow Boost Serum", "Luna Lotion", "Rose Dew Cleanser", "Velvet Mask", "Silk Mist",
     "Nova Repair Cream", "Amber Glow Essence", "Pure Pore Tonic", "Sunveil SPF", "Bloom Ritual Oil",
@@ -32,10 +32,9 @@ LEGACY_APP_NAMES = [
 def build_catalog() -> list[dict[str, Any]]:
     """Return 600 fictional fixtures. Values are not verified product facts."""
     items: list[dict[str, Any]] = []
-    categories = ["Beauty", "Skincare", "Wellness", "Care", "Lifestyle", "Essentials"]
     for index in range(1, 601):
         name = LEGACY_APP_NAMES[(index - 1) % len(LEGACY_APP_NAMES)]
-        category = categories[index % len(categories)]
+        category = CATEGORIES[index % len(CATEGORIES)]
         country = COUNTRIES[index % len(COUNTRIES)]
         items.append({
             "id": index,
@@ -55,14 +54,16 @@ def build_catalog() -> list[dict[str, Any]]:
 
 
 def filter_catalog(
-    catalog: list[dict[str, Any]], *, country: str | None = None, search: str = "",
-    min_price: float | None = None, max_price: float | None = None,
+    catalog: list[dict[str, Any]], *, country: str | None = None, category: str | None = None,
+    search: str = "", min_price: float | None = None, max_price: float | None = None,
     sort: str = "id", descending: bool = False,
 ) -> list[dict[str, Any]]:
     """Apply validated, deterministic filters and a stable sort."""
     result = catalog
     if country:
         result = [item for item in result if item["country"].casefold() == country.casefold()]
+    if category:
+        result = [item for item in result if item["category"].casefold() == category.casefold()]
     if search:
         needle = search.casefold()
         result = [item for item in result if needle in " ".join([
